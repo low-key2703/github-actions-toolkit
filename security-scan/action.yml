@@ -1,0 +1,61 @@
+name: 'Security Scanner'
+description: 'Scan Docker images for vulnerabilities using Trivy'
+author: 'Lokesh Agarwal'
+
+inputs:
+  image:
+    description: 'Docker image to scan (e.g. nginx:latest, myapp:1.0.0)'
+    required: true
+  severity:
+    description: 'Comma-separated severity levels (CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN)'
+    required: false
+    default: 'CRITICAL,HIGH'
+  format:
+    description: 'Output format (table, json, sarif)'
+    required: false
+    default: 'table'
+  exit-code:
+    description: 'Exit code when vulnerabilities are found (0=continue, 1=fail)'
+    required: false
+    default: '1'
+  output-file:
+    description: 'Save report to file (optional)'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run Trivy vulnerability scanner
+      shell: bash
+      run: |
+        # Install Trivy if not already installed
+        if ! command -v trivy &> /dev/null; then
+          echo "Installing Trivy..."
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+        fi
+
+        # Build trivy command
+        TRIVY_CMD="trivy image \
+          --severity ${{ inputs.severity }} \
+          --format ${{ inputs.format }} \
+          --exit-code ${{ inputs.exit-code }}"
+
+        # Add output file if specified
+        if [ -n "${{ inputs.output-file }}" ]; then
+          TRIVY_CMD="$TRIVY_CMD --output ${{ inputs.output-file }}"
+        fi
+
+        # Add image to scan
+        TRIVY_CMD="$TRIVY_CMD ${{ inputs.image }}"
+
+        # Run the scan
+        echo "Scanning image: ${{ inputs.image }}"
+        echo "Severity levels: ${{ inputs.severity }}"
+        echo "Output format: ${{ inputs.format }}"
+        echo ""
+
+        eval $TRIVY_CMD
