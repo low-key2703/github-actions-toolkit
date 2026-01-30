@@ -1,0 +1,122 @@
+name: 'Docker Build & Push'
+description: 'Build and push Docker images with caching and multi-platform support'
+author: 'Lokesh Agarwal'
+
+inputs:
+  context:
+    description: 'Build context path'
+    required: false
+    default: '.'
+  image:
+    description: 'Image name (e.g., myapp, username/myapp)'
+    required: true
+  tags:
+    description: 'Comma-separated tags (e.g., latest,1.0.0,stable)'
+    required: false
+    default: 'latest'
+  registry:
+    description: 'Container registry URL'
+    required: false
+    default: 'docker.io'
+  username:
+    description: 'Registry username'
+    required: false
+    default: ''
+  password:
+    description: 'Registry password or token'
+    required: false
+    default: ''
+  dockerfile:
+    description: 'Path to Dockerfile'
+    required: false
+    default: 'Dockerfile'
+  push:
+    description: 'Push image to registry (true/false)'
+    required: false
+    default: 'true'
+  platforms:
+    description: 'Target platforms (e.g., linux/amd64,linux/arm64)'
+    required: false
+    default: 'linux/amd64'
+  build-args:
+    description: 'Build arguments (key=value pairs, one per line)'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Docker Buildx
+      shell: bash
+      run: |
+        # Check if buildx is available
+        if ! docker buildx version &> /dev/null; then
+          echo "Setting up Docker Buildx..."
+          docker buildx create --use --name builder --driver docker-container
+        else
+          echo "Docker Buildx already available"
+        fi
+
+    - name: Login to registry
+      if: ${{ inputs.username != '' && inputs.password != '' }}
+      shell: bash
+      run: |
+        echo "Logging in to ${{ inputs.registry }}..."
+        echo "${{ inputs.password }}" | docker login ${{ inputs.registry }} -u "${{ inputs.username }}" --password-stdin
+
+    - name: Build and push Docker image
+      shell: bash
+      run: |
+        # Parse tags and build full image names
+        IFS=',' read -ra TAG_ARRAY <<< "${{ inputs.tags }}"
+        TAG_FLAGS=""
+        for tag in "${TAG_ARRAY[@]}"; do
+          # Handle registry prefix
+          if [ "${{ inputs.registry }}" = "docker.io" ]; then
+            FULL_IMAGE="${{ inputs.image }}:${tag}"
+          else
+            FULL_IMAGE="${{ inputs.registry }}/${{ inputs.image }}:${tag}"
+          fi
+          TAG_FLAGS="$TAG_FLAGS -t $FULL_IMAGE"
+        done
+
+        # Parse build args
+        BUILD_ARG_FLAGS=""
+        if [ -n "${{ inputs.build-args }}" ]; then
+          while IFS= read -r arg; do
+            if [ -n "$arg" ]; then
+              BUILD_ARG_FLAGS="$BUILD_ARG_FLAGS --build-arg $arg"
+            fi
+          done <<< "${{ inputs.build-args }}"
+        fi
+
+        # Build the command
+        BUILD_CMD="docker buildx build \
+          --platform ${{ inputs.platforms }} \
+          --file ${{ inputs.context }}/${{ inputs.dockerfile }} \
+          $TAG_FLAGS \
+          $BUILD_ARG_FLAGS \
+          --cache-from type=registry,ref=${{ inputs.image }}:buildcache \
+          --cache-to type=registry,ref=${{ inputs.image }}:buildcache,mode=max"
+
+        # Add push flag if enabled
+        if [ "${{ inputs.push }}" = "true" ]; then
+          BUILD_CMD="$BUILD_CMD --push"
+        else
+          BUILD_CMD="$BUILD_CMD --load"
+        fi
+
+        # Add context
+        BUILD_CMD="$BUILD_CMD ${{ inputs.context }}"
+
+        # Display what we're doing
+        echo "Building Docker image..."
+        echo "Context: ${{ inputs.context }}"
+        echo "Dockerfile: ${{ inputs.dockerfile }}"
+        echo "Tags: ${{ inputs.tags }}"
+        echo "Platforms: ${{ inputs.platforms }}"
+        echo "Push: ${{ inputs.push }}"
+        echo ""
+
+        # Execute the build
+        eval $BUILD_CMD

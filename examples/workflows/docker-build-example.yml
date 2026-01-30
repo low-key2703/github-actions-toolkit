@@ -1,0 +1,59 @@
+name: Docker Build Example
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - main
+
+jobs:
+  build-only:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create sample Dockerfile
+        run: |
+          cat > Dockerfile << 'EOF'
+          FROM alpine:latest
+          RUN echo "Hello from GitHub Actions!"
+          CMD ["echo", "Docker build successful!"]
+          EOF
+
+      - name: Build without pushing
+        uses: ./docker-build-push
+        with:
+          image: 'test-app'
+          tags: 'latest,test'
+          push: 'false'
+
+  build-with-args:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create Dockerfile with build args
+        run: |
+          cat > Dockerfile << 'EOF'
+          ARG BASE_IMAGE=alpine:latest
+          FROM ${BASE_IMAGE}
+          ARG BUILD_DATE
+          ARG VERSION=dev
+          LABEL build_date=${BUILD_DATE}
+          LABEL version=${VERSION}
+          RUN echo "Built on: ${BUILD_DATE}"
+          RUN echo "Version: ${VERSION}"
+          EOF
+
+      - name: Build with build arguments
+        uses: ./docker-build-push
+        with:
+          image: 'test-app-args'
+          build-args: |
+            BASE_IMAGE=alpine:3.19
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VERSION=1.0.0
+          push: 'false'
+
