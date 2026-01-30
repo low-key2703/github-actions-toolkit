@@ -1,0 +1,38 @@
+name: Slack Notification Example
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+
+jobs:
+  notify-success:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Send success notification
+        uses: ./slack-notifier
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          message: 'Build completes successfully!'
+          status: 'success'
+          title: 'Build Success'
+          footer: 'Triggered by ${{ github.actor }}'
+
+  notify-with-mentions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Send notification with mentions
+        uses: ./slack-notifier
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          message: 'Deployment to production completed'
+          status: 'success'
+          title: 'Production Deploy!'
+          mentions: '<!here>'
+
