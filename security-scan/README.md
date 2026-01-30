@@ -113,3 +113,26 @@ Trivy is a comprehensive security scanner that detects:
 - Application dependencies (npm, pip, gem, etc.)
 - IaC misconfigurations
 - Secrets and licenses
+
+## Production Alternatives
+
+While this action installs Trivy during runtime, production environments may prefer:
+
+### Official Trivy Action
+```yaml
+- name: Run Trivy scanner
+  uses: aquasecurity/trivy-action@master
+  with:
+    image-ref: 'nginx:latest'
+    severity: 'CRITICAL,HIGH'
+    format: 'sarif'
+    output: 'trivy-results.sarif'
+```
+
+**Benefits:**
+- Pre-installed (faster execution)
+- Maintained by Aqua Security
+- No installation overhead
+
+### Why This Action Still Valuable
+- Customizable: Full control over Trivy parameters
