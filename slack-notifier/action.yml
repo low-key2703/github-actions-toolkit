@@ -1,0 +1,63 @@
+name: 'Slack Notifier'
+description: 'Send formatted notifications to Slack with status colors and mentions'
+author: 'Lokesh Agarwal'
+
+inputs:
+  webhook-url:
+    description: 'Slack webhook URL'
+    required: true
+  message:
+    description: 'Message content to send'
+    required: true
+  status:
+    description: 'Status type: success, failure, warning, info'
+    required: false
+    default: 'info'
+  title:
+    description: 'Message title/heading'
+    required: false
+    default: ''
+  footer:
+    description: 'Footer text'
+    required: false
+    default: 'GitHub Actions'
+  mentions:
+    description: 'Mentions (e.g., <!channel>, <!here>, <@USER_ID>)'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Send Slack notification
+      shell: bash
+      run: |
+        # Determine color based on status
+        case "${{ inputs.status }}" in
+          success) COLOR="good" ;;
+          failure) COLOR="danger" ;;
+          warning) COLOR="warning" ;;
+          *) COLOR="#808080" ;;
+        esac
+
+        # Build JSON payload
+        PAYLOAD=$(cat <<EOF
+        {
+          "attachments": [
+            {
+              "color": "$COLOR",
+              "title": "${{ inputs.title }}",
+              "text": "${{ inputs.mentions }} ${{ inputs.message }}",
+              "footer": "${{ inputs.footer }}",
+              "ts": $(date +%s)
+            }
+          ]
+        }
+        EOF
+        )
+
+        # Send to Slack
+        curl -X POST \
+          -H 'Content-type: application/json' \
+          --data "$PAYLOAD" \
+          "${{ inputs.webhook-url }}"
